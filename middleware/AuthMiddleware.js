@@ -42,3 +42,11 @@ export const isJurnalisOrAdmin = (req, res, next) => {
         res.status(403).json({ message: "Akses ditolak. Anda bukan Jurnalis atau Admin." });
     }
 };
+
+export const isAdminUtama = (req, res, next) => {
+    if (req.user && req.user.role === 'admin_utama') {
+        next();
+    } else {
+        res.status(403).json({ message: "Akses ditolak. Rute ini hanya untuk Admin Utama." });
+    }
+};

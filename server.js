@@ -7,6 +7,9 @@ import cors from "cors";
 import UserRoutes from './routes/UserRoutes.js';
 import ArticleRoutes from './routes/ArticleRoutes.js';
 import CategoryRoutes from './routes/CategoryRoutes.js';
+import CommentRoutes from './routes/CommentRoutes.js'; 
+import LikeRoutes from './routes/LikeRoutes.js';
+import AdminRoutes from './routes/AdminRoutes.js';  
 
 // Impor koneksi db dari models/index.js yang sudah terkonfigurasi
 import { db } from "./models/index.js";
@@ -44,6 +47,9 @@ app.use(express.json());
 app.use('/api', UserRoutes);
 app.use('/api', ArticleRoutes);
 app.use('/api', CategoryRoutes);
+app.use('/api', CommentRoutes);
+app.use('/api', LikeRoutes);
+app.use('/api', AdminRoutes); 
 
 // Rute dasar untuk pengujian
 app.get("/", (req, res) => {

@@ -2,7 +2,8 @@
 
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { User } from "../models/index.js"; // Impor dari index model
+import { Op } from "sequelize";
+import { User, AdminLog} from "../models/index.js"; // Impor dari index model
 
 // Fungsi untuk Registrasi Pengguna
 export const register = async (req, res) => {
@@ -84,6 +85,98 @@ export const login = async (req, res) => {
 
     } catch (error) {
         console.error("Error saat login:", error);
+        res.status(500).json({ message: "Terjadi kesalahan pada server", error: error.message });
+    }
+};
+
+// =======================================================
+// FUNGSI KHUSUS ADMIN
+// =======================================================
+
+// Fungsi untuk mendapatkan semua pengguna
+export const getAllUsers = async (req, res) => {
+    try {
+        const users = await User.findAll({
+            // Jangan sertakan password dalam response demi keamanan
+            attributes: ['id_user', 'username', 'nama_lengkap', 'email', 'role', 'createdAt', 'updatedAt']
+        });
+        res.status(200).json(users);
+    } catch (error) {
+        res.status(500).json({ message: "Terjadi kesalahan pada server", error: error.message });
+    }
+};
+
+// Fungsi untuk mengubah peran pengguna
+export const updateUserRole = async (req, res) => {
+    const { id } = req.params;
+    const { role } = req.body;
+    const admin_id = req.user.id_user; // ID admin yang melakukan aksi
+
+    // Validasi peran yang diizinkan
+    const allowedRoles = ['admin_utama', 'admin_biasa', 'jurnalis', 'pembaca'];
+    if (!allowedRoles.includes(role)) {
+        return res.status(400).json({ message: "Peran tidak valid." });
+    }
+
+    try {
+        const user = await User.findByPk(id);
+        if (!user) {
+            return res.status(404).json({ message: "Pengguna tidak ditemukan." });
+        }
+
+        // Admin Utama tidak bisa mengubah perannya sendiri
+        if (user.id_user === admin_id) {
+            return res.status(403).json({ message: "Tidak dapat mengubah peran diri sendiri." });
+        }
+
+        user.role = role;
+        await user.save();
+
+        // Catat aksi admin
+        await AdminLog.create({
+            admin_id,
+            action: 'ubah_peran_pengguna',
+            note: `Peran pengguna ID ${id} (${user.username}) diubah menjadi ${role}.`
+        });
+
+        res.status(200).json({ message: "Peran pengguna berhasil diubah.", data: user });
+    } catch (error) {
+        res.status(500).json({ message: "Terjadi kesalahan pada server", error: error.message });
+    }
+};
+
+// Fungsi untuk men-suspend (soft delete) pengguna
+export const deleteUser = async (req, res) => {
+    const { id } = req.params;
+    const admin_id = req.user.id_user;
+
+    try {
+        const user = await User.findByPk(id);
+        if (!user) {
+            return res.status(404).json({ message: "Pengguna tidak ditemukan." });
+        }
+
+        // Admin Utama tidak bisa men-suspend dirinya sendiri
+        if (user.id_user === admin_id) {
+            return res.status(403).json({ message: "Tidak dapat men-suspend diri sendiri." });
+        }
+        
+        // Pengguna dengan peran admin_utama tidak bisa di-suspend
+        if (user.role === 'admin_utama') {
+            return res.status(403).json({ message: "Admin Utama tidak dapat disuspend." });
+        }
+
+        await user.destroy(); // Soft delete
+
+        // Catat aksi admin
+        await AdminLog.create({
+            admin_id,
+            action: 'suspend_pengguna',
+            note: `Pengguna ID ${id} (${user.username}) telah disuspend.`
+        });
+
+        res.status(200).json({ message: "Pengguna berhasil disuspend." });
+    } catch (error) {
         res.status(500).json({ message: "Terjadi kesalahan pada server", error: error.message });
     }
 };

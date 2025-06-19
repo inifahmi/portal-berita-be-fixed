@@ -94,3 +94,119 @@ export const createArticle = async (req, res) => {
         res.status(500).json({ message: "Terjadi kesalahan pada server" });
     }
 };
+
+// Fungsi untuk mendapatkan satu artikel berdasarkan ID
+export const getArticleById = async (req, res) => {
+    try {
+        const article = await Article.findByPk(req.params.id, {
+            include: [
+                {
+                    model: User,
+                    as: 'author',
+                    attributes: ['username', 'nama_lengkap']
+                },
+                {
+                    model: Category,
+                    attributes: ['id_category', 'name'],
+                    through: { attributes: [] }
+                }
+            ]
+        });
+
+        if (!article) {
+            return res.status(404).json({ message: "Artikel tidak ditemukan" });
+        }
+
+        res.status(200).json(article);
+    } catch (error) {
+        res.status(500).json({ message: "Terjadi kesalahan pada server", error: error.message });
+    }
+};
+
+// Fungsi untuk memperbarui artikel
+export const updateArticle = async (req, res) => {
+    const { id } = req.params;
+    const { title, content, thumbnail_url, status, category_ids } = req.body;
+
+    try {
+        const article = await Article.findByPk(id);
+        if (!article) {
+            return res.status(404).json({ message: "Artikel tidak ditemukan" });
+        }
+        
+        // Cek otorisasi: Hanya penulis asli atau admin yang bisa mengedit
+        const currentUser = req.user;
+        if (article.author_id !== currentUser.id_user && currentUser.role !== 'admin_utama' && currentUser.role !== 'admin_biasa') {
+            return res.status(403).json({ message: "Anda tidak memiliki izin untuk mengedit artikel ini." });
+        }
+
+        // Update data artikel
+        article.title = title;
+        article.content = content;
+        article.thumbnail_url = thumbnail_url;
+        article.status = status;
+        
+        // Jika status diubah menjadi 'diterbitkan' untuk pertama kalinya
+        if (status === 'diterbitkan' && !article.published_at) {
+            article.published_at = new Date();
+        }
+
+        await article.save();
+
+        // Update relasi kategori jika ada
+        if (category_ids) {
+            await article.setCategories(category_ids);
+        }
+        
+        const result = await Article.findByPk(id, {
+            include: [{ model: Category, through: { attributes: [] } }]
+        });
+
+
+        res.status(200).json({ message: "Artikel berhasil diperbarui", data: result });
+    } catch (error) {
+        res.status(500).json({ message: "Terjadi kesalahan pada server", error: error.message });
+    }
+};
+
+// Fungsi untuk menghapus artikel (Soft Delete)
+export const deleteArticle = async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const article = await Article.findByPk(id);
+        if (!article) {
+            return res.status(404).json({ message: "Artikel tidak ditemukan" });
+        }
+
+        // Cek otorisasi: Hanya penulis asli atau admin yang bisa menghapus
+        const currentUser = req.user;
+        if (article.author_id !== currentUser.id_user && currentUser.role !== 'admin_utama' && currentUser.role !== 'admin_biasa') {
+            return res.status(403).json({ message: "Anda tidak memiliki izin untuk menghapus artikel ini." });
+        }
+
+        // Karena kita menggunakan 'paranoid' di model, .destroy() akan melakukan soft delete
+        await article.destroy();
+
+        res.status(200).json({ message: "Artikel berhasil dihapus" });
+    } catch (error) {
+        res.status(500).json({ message: "Terjadi kesalahan pada server", error: error.message });
+    }
+};
+
+// Fungsi untuk menambah view count
+export const incrementViewCount = async (req, res) => {
+    try {
+        const article = await Article.findByPk(req.params.id);
+        if (article) {
+            article.view_count += 1;
+            await article.save();
+            res.status(200).json({ message: "View count berhasil ditambahkan" });
+        } else {
+            res.status(404).json({ message: "Artikel tidak ditemukan" });
+        }
+    } catch (error) {
+        res.status(500).json({ message: "Terjadi kesalahan pada server" });
+    }
+};
+
